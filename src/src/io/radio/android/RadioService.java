@@ -2,6 +2,7 @@ package io.radio.android;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.lang.ref.WeakReference;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.util.Timer;
@@ -97,24 +98,11 @@ public class RadioService extends Service implements OnPreparedListener,
 		registerBroadcasts();
 		initializeTimers();
 
-		messenger = new Messenger(new Handler() {
-			@Override
-			public void handleMessage(Message msg) {
-				switch (msg.what) {
-				case ApiUtil.ACTIVITYCONNECTED:
-					activityConnected = true;
-					activityMessenger = msg.replyTo;
-					break;
-				case ApiUtil.ACTIVITYDISCONNECTED:
-					activityConnected = false;
-					break;
-				}
-			}
-		});
+		messenger = new Messenger(new IncomingHandler(this));
 		this.startForeground(NotificationHandler.CONSTANTNOTIFICATION,
 				notificationManager.constantNotification());
 
-		// Create the Mediaplayer and setup to play stream
+		// Create the MediaPlayer and setup to play stream
 		radioPlayer = new MediaPlayer();
 		radioPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
 		radioPlayer.setOnPreparedListener(this);
@@ -143,6 +131,35 @@ public class RadioService extends Service implements OnPreparedListener,
 		TelephonyManager mgr = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
 		if (mgr != null) {
 			mgr.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+		}
+	}
+
+	public void activityConnected(Message msg) {
+		activityConnected = true;
+		activityMessenger = msg.replyTo;
+	}
+	
+	public void activityDisconnected(Message msg) {
+		activityConnected = false;
+	}
+	
+	static class IncomingHandler extends Handler {
+		private final WeakReference<RadioService> radioService;
+		IncomingHandler(RadioService service) {
+			this.radioService = new WeakReference<RadioService>(service);
+		}
+				
+		@Override
+		public void handleMessage(Message msg) {
+			RadioService service = radioService.get();
+			switch (msg.what) {
+			case ApiUtil.ACTIVITYCONNECTED:
+				service.activityConnected(msg);
+				break;
+			case ApiUtil.ACTIVITYDISCONNECTED:
+				service.activityDisconnected(msg);
+				break;
+			}
 		}
 	}
 
@@ -203,10 +220,11 @@ public class RadioService extends Service implements OnPreparedListener,
 		updateTimer.scheduleAtFixedRate(new TimerTask() {
 			@Override
 			public void run() {
+				/*
 				RemoteViews view = new RemoteViews(getPackageName(),
 						R.layout.widget_layout);
 				currentPacket.progress++;
-
+				 */
 				// Push update for this widget to the home screen
 				RadioWidgetProvider.updateWidget(getApplicationContext(),
 						AppWidgetManager.getInstance(getApplicationContext()),

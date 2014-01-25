@@ -183,7 +183,7 @@ public class SearchActivity extends ListActivity {
 			RequestSong song = songs.get(position);
 			TextView songName = (TextView) v.findViewById(R.id.songName);
 			TextView artistName = (TextView) v.findViewById(R.id.artistName);
-			TextView songId = (TextView) v.findViewById(R.id.songId);
+			// TextView songId = (TextView) v.findViewById(R.id.songId);
 			TextView lastPlayed = (TextView) v.findViewById(R.id.lastPlayed);
 			TextView lastRequested = (TextView) v
 					.findViewById(R.id.lastRequested);
@@ -199,10 +199,9 @@ public class SearchActivity extends ListActivity {
 
 			String lastPlayedString;
 			String lastRequestedString;
-			DateFormat dateFormat = new DateFormat();
-			lastPlayedString = dateFormat.format("E d MMM, k:mm",
+			lastPlayedString = DateFormat.format("E d MMM, k:mm",
 					lastPlayedDate).toString();
-			lastRequestedString = dateFormat.format("E d MMM, k:mm",
+			lastRequestedString = DateFormat.format("E d MMM, k:mm",
 					lastRequestedDate).toString();
 
 			lastPlayed.setText(lastPlayedString);

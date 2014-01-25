@@ -1,6 +1,7 @@
 package io.radio.android;
 
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Timer;
@@ -52,7 +53,6 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.ProgressBar;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ViewFlipper;
@@ -77,8 +77,6 @@ public class MainActivity extends Activity {
 	private ImageButton faveButton;
 	private ViewFlipper viewFlipper;
 	private GestureOverlayView gestureOverlay;
-	private ScrollView queueScroll;
-	private ScrollView lpScroll;
 	private FXView fxView;
 	private AudioManager audioManager;
 	private RemoteControlClient remoteControlClient;
@@ -102,7 +100,8 @@ public class MainActivity extends Activity {
 			service = null;
 		}
 	};
-	final Messenger mMessenger = new Messenger(new IncomingHandler());
+	
+	final Messenger mMessenger = new Messenger(new IncomingHandler(this));
 
 	OnAudioFocusChangeListener afChangeListener = new OnAudioFocusChangeListener() {
 		public void onAudioFocusChange(int focusChange) {
@@ -113,43 +112,63 @@ public class MainActivity extends Activity {
 		}
 	};
 
-	class IncomingHandler extends Handler {
+	public void updateProgress() {
+		progress++;
+		songProgressBar.setProgress(progress);
+		songLength.setText(ApiUtil.formatSongLength(progress, length));
+	}
+	
+	public void musicStart() {
+		audioManager.requestAudioFocus(afChangeListener,
+			AudioManager.STREAM_MUSIC,
+			AudioManager.AUDIOFOCUS_GAIN);
+
+		updatePlayButton();
+		SharedPreferences sharedPref = PreferenceManager
+			.getDefaultSharedPreferences(getApplicationContext());
+
+		// FxView
+		boolean dBGraph = sharedPref
+			.getBoolean("dBGraphEnabled", false);
+		
+		boolean wavVis = sharedPref.getBoolean("waveVisEnabled", true);
+		if (dBGraph || wavVis) {
+			fxView.startFx(service.getAudioStreamId(), dBGraph, wavVis);
+		}
+	}
+	
+	public void musicStop() {
+		updatePlayButton();
+		audioManager.abandonAudioFocus(afChangeListener);
+		fxView.stopFx();
+	}
+	
+	static class IncomingHandler extends Handler {
+		private final WeakReference<MainActivity> mActivity;
+		IncomingHandler(MainActivity activity) {
+			this.mActivity = new WeakReference<MainActivity>(activity);
+		}
+		
 		@Override
 		public void handleMessage(Message msg) {
+			MainActivity main = mActivity.get();
 			if (msg.what == ApiUtil.NPUPDATE) {
 				ApiPacket packet = (ApiPacket) msg.obj;
-				MainActivity.this.updateNP(packet);
+				mActivity.get().updateNP(packet);
 			}
+			
 			if (msg.what == ApiUtil.PROGRESSUPDATE) {
-				progress++;
-				songProgressBar.setProgress(progress);
-				songLength.setText(ApiUtil.formatSongLength(progress, length));
+				main.updateProgress();
 			}
+			
 			if (msg.what == ApiUtil.MUSICSTART) {
-				audioManager
-						.requestAudioFocus(afChangeListener,
-								AudioManager.STREAM_MUSIC,
-								AudioManager.AUDIOFOCUS_GAIN);
-
-				updatePlayButton();
-				SharedPreferences sharedPref = PreferenceManager
-						.getDefaultSharedPreferences(getApplicationContext());
-
-				// FxView
-				boolean dBGraph = sharedPref
-						.getBoolean("dBGraphEnabled", false);
-				boolean wavVis = sharedPref.getBoolean("waveVisEnabled", true);
-				if (dBGraph || wavVis)
-					fxView.startFx(service.getAudioStreamId(), dBGraph, wavVis);
+				main.musicStart();
 			}
 			if (msg.what == ApiUtil.MUSICSTOP) {
-				updatePlayButton();
-				audioManager.abandonAudioFocus(afChangeListener);
-				fxView.stopFx();
+				main.musicStop();
 			}
-
 		}
-	};
+	}
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
@@ -226,7 +245,7 @@ public class MainActivity extends Activity {
 		playButton = (ImageButton) findViewById(R.id.player_play);
 		playButton.setOnClickListener(new View.OnClickListener() {
 			public void onClick(View view) {
-				if (service.currentlyPlaying) {
+				if (RadioService.currentlyPlaying) {
 					service.stopPlayer();
 				} else {
 					service.restartPlayer();
@@ -257,8 +276,6 @@ public class MainActivity extends Activity {
 			}
 		});
 		viewFlipper = (ViewFlipper) findViewById(R.id.player_flipper);
-		queueScroll = (ScrollView) findViewById(R.id.player_queuescroll);
-		lpScroll = (ScrollView) findViewById(R.id.player_lpscroll);
 		gestureOverlay = (GestureOverlayView) findViewById(R.id.player_gestureoverlay);
 		final GestureDetector gestureDetector = new GestureDetector(this,
 				new Detector());
@@ -390,7 +407,7 @@ public class MainActivity extends Activity {
 					}
 				}
 			} catch (Exception ex) {
-				Log.e(this.TAG, ex.getMessage());
+				Log.e(Detector.TAG, ex.getMessage());
 			}
 
 			return true;
@@ -457,7 +474,7 @@ public class MainActivity extends Activity {
 	}
 
 	private void updatePlayButton() {
-		if (service.currentlyPlaying) {
+		if (RadioService.currentlyPlaying) {
 			playButton.setImageResource(R.drawable.av_stop);
 		} else {
 			playButton.setImageResource(R.drawable.av_play);
